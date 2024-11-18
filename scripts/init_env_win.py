@@ -26,7 +26,7 @@ if os.path.exists(CAPSTONE_DIR):
 
 # icu
 print('Downloading ICU library from ' + ICU_LIB_URL)
-r = requests.get(ICU_LIB_URL)
+r = requests.get(ICU_LIB_URL, verify=False)
 print('Extracting ICU library')
 with zipfile.ZipFile(io.BytesIO(r.content)) as z:
     with z.open(z.namelist()[-1]) as zf, open(ICU_WINDOWS_FILE, 'wb') as f:
@@ -38,7 +38,7 @@ os.remove(ICU_WINDOWS_FILE)
 
 # capstone
 print('Downloading Capstone from ' + CAPSTONE_LIB_URL)
-r = requests.get(CAPSTONE_LIB_URL)
+r = requests.get(CAPSTONE_LIB_URL, verify=False)
 print('Extracting Capstone library')
 with zipfile.ZipFile(io.BytesIO(r.content)) as z:
     capstone_zip_dir = z.namelist()[0].split('/', 1)[0]

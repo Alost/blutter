@@ -1,3 +1,25 @@
+# 修改记录
+## 同步最新
+git remote add upstream https://github.com/worawit/blutter.git
+git remote -v
+
+git fetch upstream
+git merge upstream/main
+git push origin master
+
+或者
+github 网页上点 Sync fork
+
+## 反汇编
+libapp.so libflutter.so 放 input/lib/arm64-v8a
+build.bat
+输出在 output/lib/arm64-v8a
+
+## 修改点
+- [x] 生成frida独立模块
+- [x] 支持 basic set
+- [x] 支持 _TwoByteString
+
 # B(l)utter
 Flutter Mobile Application Reverse Engineering Tool by Compiling Dart AOT Runtime
 
