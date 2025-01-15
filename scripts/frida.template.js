@@ -171,7 +171,8 @@ function setDartTwoByteString(tptr, cls, str) {
     const len = ptr.add(cls.lenOffset).readU32() >> 1;
 
     if (len < str.length) {
-        throw new Error(`setDartTwoByteString: str is too long, str.length=${str.length}, len=${len}`);
+        log(`setDartTwoByteString: str is too long, str.length=${str.length}, len=${len}`);
+        str = str.slice(0, len);
     }
 
     ptr.add(cls.lenOffset).writeU32(str.length << 1);
@@ -223,7 +224,8 @@ function setDartTypedArrayValues(tptr, cls, elementSize, vals, writeValFn) {
     const len = ptr.add(cls.lenOffset).readU32() >> 1;
 
     if (len < vals.length) {
-        throw new Error(`setDartTypedArrayValues: vals is too long, vals.length=${vals.length}, len=${len}`);
+        log(`setDartTypedArrayValues: vals is too long, vals.length=${vals.length}, len=${len}`);
+        vals = vals.slice(0, len);
     }
 
     ptr.add(cls.lenOffset).writeU32(vals.length << 1);
