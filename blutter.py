@@ -122,6 +122,13 @@ def find_compat_macro(dart_version: str, no_analysis: bool):
         # https://github.com/dart-lang/sdk/commit/b9b341f4a71b3ac8c9810eb24e318287798457ae#diff-545efb05c0f9e7191a855bca5e463f8f7f68079f74056f0040196c666b3bb8f0
         if mm.find(b'build_generic_method_extractor_code)') == -1:
             macros.append('-DNO_METHOD_EXTRACTOR_STUB=1')
+
+    with open(os.path.join(vm_path, 'object.h'), 'rb') as f:
+        mm = mmap.mmap(f.fileno(), 0, access = mmap.ACCESS_READ)
+        # [vm] Refactor access to Integer value
+        # https://github.com/dart-lang/sdk/commit/84fd647969f0d74ab63f0994d95b5fc26cac006a
+        if mm.find(b'AsTruncatedInt64Value()') == -1:
+            macros.append('-DUNIFORM_INTEGER_ACCESS=1')
     
     if no_analysis:
         macros.append('-DNO_CODE_ANALYSIS=1')
@@ -135,9 +142,11 @@ def cmake_blutter(input: BlutterInput):
     macros = find_compat_macro(input.dart_info.version, input.no_analysis)
     my_env = None
     if platform.system() == 'Darwin':
-        llvm_path = subprocess.run(['brew', '--prefix', 'llvm@16'], capture_output=True, check=True).stdout.decode().strip()
-        clang_file = os.path.join(llvm_path, 'bin', 'clang')
-        my_env = {**os.environ, 'CC': clang_file, 'CXX': clang_file+'++'}
+        mac_ver = int(platform.mac_ver()[0].split('.', 1)[0])
+        if mac_ver < 15:
+            llvm_path = subprocess.run(['brew', '--prefix', 'llvm@16'], capture_output=True, check=True).stdout.decode().strip()
+            clang_file = os.path.join(llvm_path, 'bin', 'clang')
+            my_env = {**os.environ, 'CC': clang_file, 'CXX': clang_file+'++'}
     # cmake -GNinja -Bbuild -DCMAKE_BUILD_TYPE=Release
     subprocess.run([CMAKE_CMD, '-GNinja', '-B', builddir, f'-DDARTLIB={input.dart_info.lib_name}', f'-DNAME_SUFFIX={input.name_suffix}', '-DCMAKE_BUILD_TYPE=Release', '--log-level=NOTICE'] + macros, cwd=blutter_dir, check=True, env=my_env)
 
@@ -175,7 +184,17 @@ def build_and_run(input: BlutterInput):
         blutter_dir = os.path.join(SCRIPT_DIR, 'blutter')
         dbg_output_path = os.path.abspath(os.path.join(input.outdir, 'out'))
         dbg_cmd_args = f'-i {input.libapp_path} -o {dbg_output_path}'
-        subprocess.run([CMAKE_CMD, '-G', 'Visual Studio 17 2022', '-A', 'x64', '-B', input.outdir, f'-DDARTLIB={input.dart_info.lib_name}', 
+
+        vscmd_ver = os.getenv('VSCMD_VER')
+        assert vscmd_ver is not None, "Need run blutter in Visual Studio Develeper console"
+        if vscmd_ver.startswith('18.'):
+            generator = 'Visual Studio 18 2026'
+        elif vscmd_ver.startswith('17.'):
+            generator = 'Visual Studio 17 2022'
+        else:
+            assert False, "Unknown Visual Studio version"
+
+        subprocess.run([CMAKE_CMD, '-G', generator, '-A', 'x64', '-B', input.outdir, f'-DDARTLIB={input.dart_info.lib_name}', 
                         f'-DNAME_SUFFIX={input.name_suffix}', f'-DDBG_CMD:STRING={dbg_cmd_args}'] + macros + [blutter_dir], check=True)
         dbg_exe_dir = os.path.join(input.outdir, 'Debug')
         os.makedirs(dbg_exe_dir, exist_ok=True)

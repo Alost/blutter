@@ -187,9 +187,18 @@ std::vector<std::pair<intptr_t, std::string>> DartDumper::DumpStructHeaderFile(s
 		if (objType == dart::ObjectPool::EntryType::kTaggedObject) {
 			obj = pool.ObjectAt(i);
 			if (obj.IsUnlinkedCall()) {
-				const auto imm = pool.RawValueAt(i + 1);
-				auto dartFn = app.GetFunction(imm - app.base());
-				name = std::format("UnlinkedCall_{:#x}_{:#x}", offset, dartFn->Address(), offset);
+				// since Dart 3.10, target type might be kTaggedObject
+				auto unlinkTargetType = pool.TypeAt(i + 1);
+				if (unlinkTargetType == dart::ObjectPool::EntryType::kImmediate) {
+					const auto imm = pool.RawValueAt(i + 1);
+					auto dartFn = app.GetFunction(imm - app.base());
+					name = std::format("UnlinkedCall_{:#x}_{:#x}", offset, dartFn->Address(), offset);
+				}
+				else {
+					ASSERT(unlinkTargetType == dart::ObjectPool::EntryType::kTaggedObject);
+					const auto imm = pool.RawValueAt(i + 1);
+					name = std::format("UnlinkedCall_{:#x}_tagged_{:#x}", offset, imm - app.base());
+				}
 			}
 			else {
 				// TODO: more meaningful variable name
@@ -461,8 +470,8 @@ std::string DartDumper::ObjectToString(dart::Object& obj, bool simpleForm, bool 
 		return std::format("Smi: {:#x}", dart::Smi::Cast(obj).Value());
 	case dart::kMintCid:
 		if (simpleForm || depth > 0)
-			return std::format("{:#x}", dart::Mint::Cast(obj).value());
-		return std::format("Mint: {:#x}", dart::Mint::Cast(obj).value());
+			return std::format("{:#x}", MintValue(dart::Mint::Cast(obj)));
+		return std::format("Mint: {:#x}", MintValue(dart::Mint::Cast(obj)));
 	case dart::kDoubleCid:
 		if (simpleForm || depth > 0)
 			return std::format("{}", dart::Double::Cast(obj).value());
@@ -512,7 +521,9 @@ std::string DartDumper::ObjectToString(dart::Object& obj, bool simpleForm, bool 
 		}
 		return std::format("Code: {} ({:#x})", code.ToCString(), ep);
 	}
+	case dart::kArrayCid:
 	case dart::kImmutableArrayCid: {
+		// Note: since Dart 3.7, Ojbect Pool is mutable. so, Array is used too
 		// Objects in Object Pool immutable, so only immutable array is used for array
 		// Most of no type arguments in Object Pool are Argument Descriptor
 		const auto& arr = dart::Array::Cast(obj);
@@ -547,7 +558,7 @@ std::string DartDumper::ObjectToString(dart::Object& obj, bool simpleForm, bool 
 	case dart::kRecordCid: {
 		const auto& record = dart::Record::Cast(obj);
 		std::ostringstream ss;
-		const auto type = app.typeDb->FindOrAdd(record.GetRecordType());
+		const auto type = app.typeDb->FindOrAdd(DartGetRecordType(record));
 		ss << "Record" << type->ToString() << " = (";
 		auto& field = dart::Object::Handle();
 		const auto num_fields = record.num_fields();
@@ -787,10 +798,18 @@ std::string DartDumper::getPoolObjectDescription(intptr_t offset, bool simpleFor
 	if (objType == dart::ObjectPool::EntryType::kTaggedObject) {
 		auto& obj = dart::Object::Handle(pool.ObjectAt(idx));
 		if (obj.IsUnlinkedCall()) {
-			ASSERT(pool.TypeAt(idx + 1) == dart::ObjectPool::EntryType::kImmediate);
-			const auto imm = pool.RawValueAt(idx + 1);
-			auto dartFn = app.GetFunction(imm - app.base());
-			return std::format("[pp+{:#x}] UnlinkedCall: {:#x} - {}", offset, dartFn->Address(), dartFn->FullName().c_str());
+			// since Dart 3.10, target type might be kTaggedObject
+			auto unlinkTargetType = pool.TypeAt(idx + 1);
+			if (unlinkTargetType == dart::ObjectPool::EntryType::kImmediate) {
+				const auto imm = pool.RawValueAt(idx + 1);
+				auto dartFn = app.GetFunction(imm - app.base());
+				return std::format("[pp+{:#x}] UnlinkedCall: {:#x} - {}", offset, dartFn->Address(), dartFn->FullName().c_str());
+			}
+			else {
+				ASSERT(unlinkTargetType == dart::ObjectPool::EntryType::kTaggedObject);
+				auto& obj2 = dart::Object::Handle(pool.ObjectAt(idx + 1));
+				return std::format("[pp+{:#x}] UnlinkedCall: {}", offset, ObjectToString(obj2, simpleForm));
+			}
 		}
 		return std::format("[pp+{:#x}] {}", offset, ObjectToString(obj, simpleForm));
 	}

@@ -82,8 +82,19 @@ function getFuncTarget(fn_addr_offset) {
     return libapp.add(fn_addr_offset);
 }
 
-function tryLoadLibapp(onLibappLoaded) {
-    libapp = Module.findBaseAddress("libapp.so");
+function tryLoadLibapp() {
+    try {
+        libapp = Module.findBaseAddress('libapp.so');
+    } catch (e) {
+        if (e instanceof TypeError && e.message === "not a function") {
+            libapp = Process.findModuleByName('libapp.so');
+            if (libapp != null) {
+                libapp = libapp.base;
+            }
+        } else {
+            throw e;
+        }
+    }
     if (libapp === null) {
         log("libapp not loaded, wait...");
         setTimeout(() => tryLoadLibapp(onLibappLoaded), 500);
